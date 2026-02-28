@@ -168,7 +168,7 @@ export async function generateIllustration(description: string): Promise<Illustr
     }
 
     const data = await response.json();
-    const imageUrl = data.choices?.[0]?.message?.images?.[0]?.imageUrl?.url;
+    const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
     const usage = data.usage;
     return {
       url: imageUrl || null,
