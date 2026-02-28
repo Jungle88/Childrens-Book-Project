@@ -119,6 +119,9 @@ export default function CreatePage() {
       const data = await res.json();
       trackEvent('story_created', { storyId: data.id, setting, childAge });
 
+      // Save full story to localStorage for immediate reading
+      localStorage.setItem(`story_${data.id}`, JSON.stringify(data));
+
       // Save to localStorage library
       const library = JSON.parse(localStorage.getItem('storybook_library') || '[]');
       library.unshift({ id: data.id, title: data.title, childName: childName.trim(), createdAt: new Date().toISOString() });

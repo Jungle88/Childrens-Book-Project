@@ -31,6 +31,14 @@ export default function ReadPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Check localStorage first (works on serverless where DB is ephemeral)
+    const cached = localStorage.getItem(`story_${id}`);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (parsed.pages) { setStory(parsed); setLoading(false); return; }
+      } catch {}
+    }
     fetch(`/api/stories/${id}`).then(r => r.json()).then(d => { if (!d.error) setStory(d); setLoading(false); }).catch(() => setLoading(false));
   }, [id]);
 
