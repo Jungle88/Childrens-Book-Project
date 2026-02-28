@@ -21,6 +21,7 @@ export async function POST(request: Request) {
     let title: string, subtitle: string, dedication: string;
     let pages: any[];
     let source = 'template';
+    let textCost = 0;
 
     if (process.env.OPENROUTER_API_KEY) {
       try {
@@ -30,6 +31,12 @@ export async function POST(request: Request) {
         dedication = generated.dedication;
         pages = generated.pages;
         source = 'ai';
+
+        // Calculate text generation cost from token usage
+        if (generated.textTokens) {
+          textCost = (generated.textTokens.input / 1_000_000) * PRICING['gemini-2.0-flash'].input
+            + (generated.textTokens.output / 1_000_000) * PRICING['gemini-2.0-flash'].output;
+        }
       } catch (aiErr) {
         console.error('AI generation error, falling back to templates:', aiErr);
         const { generateStory } = await import('@/lib/story-templates');
@@ -48,13 +55,17 @@ export async function POST(request: Request) {
       pages = tmpl.pages;
     }
 
-    // Try to generate illustrations for each page
-    let illustrationCount = 0;
+    // Generate illustrations and track costs
+    let illustrationCost = 0;
     if (process.env.OPENROUTER_API_KEY) {
       const illustrationPromises = pages.map(async (page) => {
         try {
-          const url = await generateIllustration(page.illustrationDescription);
-          if (url) { page.illustrationUrl = url; illustrationCount++; }
+          const result = await generateIllustration(page.illustrationDescription);
+          if (result.url) page.illustrationUrl = result.url;
+          if (result.tokens) {
+            illustrationCost += (result.tokens.input / 1_000_000) * PRICING['gemini-3-pro-image'].input
+              + (result.tokens.output / 1_000_000) * PRICING['gemini-3-pro-image'].output;
+          }
         } catch (e) {
           console.error('Illustration generation failed for page', page.pageNumber, e);
         }
@@ -62,13 +73,11 @@ export async function POST(request: Request) {
       await Promise.allSettled(illustrationPromises);
     }
 
-    // COGS estimate
-    const costs = {
-      textGeneration: 0.003, // ~1K input + 2K output tokens on gemini-2.0-flash
-      illustrations: illustrationCount * 0.02, // ~$0.02 per image on gemini-3-pro-image
-      total: 0,
+    const costs: StoryCosts = {
+      textGeneration: +textCost.toFixed(4),
+      illustrations: +illustrationCost.toFixed(4),
+      total: +(textCost + illustrationCost).toFixed(4),
     };
-    costs.total = +(costs.textGeneration + costs.illustrations).toFixed(4);
 
     const id = uuidv4();
     const now = new Date().toISOString();
@@ -80,21 +89,21 @@ export async function POST(request: Request) {
       await db.execute({
         sql: 'INSERT INTO stories (id, title, child_name, child_age, input_json, pages_json, created_at, views, shares) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0)',
         args: [id, title, childName, childAge,
-          JSON.stringify({ interests, lessons, characters, format, subtitle, dedication }),
+          JSON.stringify({ interests, lessons, characters, format, subtitle, dedication, costs }),
           JSON.stringify(pages), now],
       });
       await db.execute({
         sql: 'INSERT INTO analytics_events (event, properties_json) VALUES (?, ?)',
-        args: ['story_created', JSON.stringify({ storyId: id, childAge, interests, format, source })],
+        args: ['story_created', JSON.stringify({ storyId: id, childAge, interests, format, source, costs })],
       });
     } catch (dbErr) {
       console.error('DB save error (non-fatal):', dbErr);
     }
 
     return NextResponse.json({
-      id, title, subtitle, dedication, pages, source, format,
+      id, title, subtitle, dedication, pages, source, format, costs,
       childName, childAge, interests, lessons, characters,
-      createdAt: now, views: 0, shares: 0, costs,
+      createdAt: now, views: 0, shares: 0,
     });
   } catch (error) {
     console.error('Generate error:', error);

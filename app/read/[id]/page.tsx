@@ -207,6 +207,9 @@ export default function ReadPage() {
                       <button onClick={(e) => { e.stopPropagation(); setPg(-1); }} className="px-4 py-2 text-sm rounded-full border border-border text-brown hover:bg-cream-dark transition">Read Again</button>
                       <button onClick={(e) => { e.stopPropagation(); router.push('/create'); }} className="px-4 py-2 text-sm rounded-full bg-purple-600 text-white hover:bg-purple-700 transition">New Story</button>
                     </div>
+                    {(story as any).costs && (
+                      <p className="text-brown-light/50 text-xs mt-6">COGS: ~${(story as any).costs.total.toFixed(2)}</p>
+                    )}
                   </div>
                 )}
               </Border>
