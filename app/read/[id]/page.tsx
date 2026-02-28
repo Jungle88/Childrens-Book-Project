@@ -7,16 +7,30 @@ import { trackEvent } from '@/components/GoogleAnalytics';
 import Link from 'next/link';
 import type { Story, StoryPage } from '@/lib/types';
 
+function IllustrationBlock({ page }: { page: StoryPage }) {
+  if (page.illustrationUrl) {
+    return (
+      <div className="rounded-xl overflow-hidden mb-6 border border-border">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={page.illustrationUrl} alt={page.illustrationDescription} className="w-full h-auto" />
+      </div>
+    );
+  }
+  // Fallback: colored mood block with description
+  return (
+    <div
+      className="rounded-xl mb-6 p-8 flex items-center justify-center min-h-[200px]"
+      style={{ backgroundColor: page.moodColor + '22', borderLeft: `4px solid ${page.moodColor}` }}
+    >
+      <p className="text-brown-light text-sm italic text-center max-w-md">{page.illustrationDescription}</p>
+    </div>
+  );
+}
+
 function Border({ color, children }: { color: string; children: React.ReactNode }) {
   return (
-    <div className="relative p-8 md:p-12 max-w-2xl mx-auto">
-      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 400 500" preserveAspectRatio="none">
-        <rect x="10" y="10" width="380" height="480" rx="20" fill="none" stroke={color} strokeWidth="3" opacity="0.3" />
-        <circle cx="25" cy="25" r="5" fill={color} opacity="0.3" />
-        <circle cx="375" cy="25" r="5" fill={color} opacity="0.3" />
-        <circle cx="25" cy="475" r="5" fill={color} opacity="0.3" />
-        <circle cx="375" cy="475" r="5" fill={color} opacity="0.3" />
-      </svg>
+    <div className="relative p-6 md:p-10 max-w-2xl mx-auto">
+      <div className="absolute inset-0 rounded-2xl border-2 opacity-20" style={{ borderColor: color }} />
       <div className="relative z-10">{children}</div>
     </div>
   );
@@ -31,13 +45,12 @@ export default function ReadPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check localStorage first (works on serverless where DB is ephemeral)
     const cached = localStorage.getItem(`story_${id}`);
     if (cached) {
       try {
         const parsed = JSON.parse(cached);
         if (parsed.pages) { setStory(parsed); setLoading(false); return; }
-      } catch {}
+      } catch { /* ignore */ }
     }
     fetch(`/api/stories/${id}`).then(r => r.json()).then(d => { if (!d.error) setStory(d); setLoading(false); }).catch(() => setLoading(false));
   }, [id]);
@@ -61,22 +74,87 @@ export default function ReadPage() {
   const downloadPdf = async () => {
     const { jsPDF } = await import('jspdf');
     if (!story) return;
+    const storyFormat = (story as any).format || 'digital';
     const doc = new jsPDF('p', 'mm', 'a4');
-    const w = doc.internal.pageSize.getWidth(), h = doc.internal.pageSize.getHeight();
-    doc.setFillColor(253, 248, 240); doc.rect(0, 0, w, h, 'F');
-    doc.setFont('times', 'bold'); doc.setFontSize(28); doc.setTextColor(45, 27, 14);
-    doc.text(doc.splitTextToSize(story.title, w - 40), w / 2, h / 3, { align: 'center' });
-    if (story.subtitle) { doc.setFontSize(14); doc.setFont('times', 'italic'); doc.text(story.subtitle, w / 2, h / 3 + 20, { align: 'center' }); }
-    if (story.dedication) { doc.setFontSize(11); doc.text(doc.splitTextToSize(story.dedication, w - 40), w / 2, h / 2, { align: 'center' }); }
-    for (const p of story.pages) {
-      doc.addPage(); doc.setFillColor(253, 248, 240); doc.rect(0, 0, w, h, 'F');
-      doc.setDrawColor(p.moodColor || '#D4A754'); doc.setLineWidth(0.5); doc.roundedRect(10, 10, w - 20, h - 20, 5, 5);
-      doc.setFontSize(12); doc.setFont('times', 'normal'); doc.setTextColor(45, 27, 14);
-      doc.text(doc.splitTextToSize(p.text, w - 40), 20, 40);
-      doc.setFontSize(9); doc.setTextColor(150, 130, 110); doc.text(`Page ${p.pageNumber}`, w / 2, h - 15, { align: 'center' });
+    const w = doc.internal.pageSize.getWidth();
+    const h = doc.internal.pageSize.getHeight();
+
+    if (storyFormat === 'a4-book') {
+      // A4 booklet: 4 pages on 2 sheets, ordered for fold-and-staple
+      // Sheet 1 front: page 4 (left) + page 1 (right)
+      // Sheet 1 back:  page 2 (left) + page 3 (right)
+      const halfW = w / 2;
+      const pages = story.pages;
+
+      const drawHalfPage = (page: StoryPage, x: number) => {
+        doc.setFillColor(253, 248, 240);
+        doc.rect(x, 0, halfW, h, 'F');
+        doc.setDrawColor(page.moodColor || '#D4A754');
+        doc.setLineWidth(0.3);
+        doc.roundedRect(x + 5, 5, halfW - 10, h - 10, 3, 3);
+        doc.setFontSize(10);
+        doc.setFont('times', 'normal');
+        doc.setTextColor(45, 27, 14);
+        const lines = doc.splitTextToSize(page.text, halfW - 20);
+        doc.text(lines, x + 10, 25);
+        doc.setFontSize(8);
+        doc.setTextColor(150, 130, 110);
+        doc.text(`Page ${page.pageNumber}`, x + halfW / 2, h - 10, { align: 'center' });
+      };
+
+      // Sheet 1 front
+      doc.setFillColor(253, 248, 240); doc.rect(0, 0, w, h, 'F');
+      if (pages[3]) drawHalfPage(pages[3], 0);
+      if (pages[0]) drawHalfPage(pages[0], halfW);
+
+      // Sheet 1 back
+      doc.addPage();
+      doc.setFillColor(253, 248, 240); doc.rect(0, 0, w, h, 'F');
+      if (pages[1]) drawHalfPage(pages[1], 0);
+      if (pages[2]) drawHalfPage(pages[2], halfW);
+
+    } else if (storyFormat === 'comic') {
+      // Single page comic: 2x2 grid
+      doc.setFillColor(253, 248, 240); doc.rect(0, 0, w, h, 'F');
+      doc.setFont('times', 'bold'); doc.setFontSize(16); doc.setTextColor(45, 27, 14);
+      doc.text(story.title, w / 2, 15, { align: 'center' });
+
+      const panelW = (w - 30) / 2;
+      const panelH = (h - 40) / 2;
+      const positions = [[10, 25], [10 + panelW + 10, 25], [10, 25 + panelH + 10], [10 + panelW + 10, 25 + panelH + 10]];
+
+      story.pages.forEach((page, i) => {
+        const [px, py] = positions[i];
+        doc.setDrawColor(page.moodColor || '#D4A754');
+        doc.setLineWidth(0.5);
+        doc.roundedRect(px, py, panelW, panelH, 3, 3);
+        doc.setFillColor(page.moodColor || '#D4A754');
+        doc.rect(px, py, panelW, 1, 'F');
+        doc.setFontSize(8);
+        doc.setFont('times', 'normal');
+        doc.setTextColor(45, 27, 14);
+        const lines = doc.splitTextToSize(page.text, panelW - 10);
+        doc.text(lines.slice(0, 12), px + 5, py + 10);
+      });
+
+    } else {
+      // Standard PDF (digital format fallback)
+      doc.setFillColor(253, 248, 240); doc.rect(0, 0, w, h, 'F');
+      doc.setFont('times', 'bold'); doc.setFontSize(28); doc.setTextColor(45, 27, 14);
+      doc.text(doc.splitTextToSize(story.title, w - 40), w / 2, h / 3, { align: 'center' });
+      if (story.subtitle) { doc.setFontSize(14); doc.setFont('times', 'italic'); doc.text(story.subtitle, w / 2, h / 3 + 20, { align: 'center' }); }
+      if (story.dedication) { doc.setFontSize(11); doc.text(doc.splitTextToSize(story.dedication, w - 40), w / 2, h / 2, { align: 'center' }); }
+      for (const p of story.pages) {
+        doc.addPage(); doc.setFillColor(253, 248, 240); doc.rect(0, 0, w, h, 'F');
+        doc.setDrawColor(p.moodColor || '#D4A754'); doc.setLineWidth(0.5); doc.roundedRect(10, 10, w - 20, h - 20, 5, 5);
+        doc.setFontSize(12); doc.setFont('times', 'normal'); doc.setTextColor(45, 27, 14);
+        doc.text(doc.splitTextToSize(p.text, w - 40), 20, 40);
+        doc.setFontSize(9); doc.setTextColor(150, 130, 110); doc.text(`Page ${p.pageNumber}`, w / 2, h - 15, { align: 'center' });
+      }
     }
+
     doc.save(`${story.title.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
-    trackEvent('story_downloaded', { storyId: id });
+    trackEvent('story_downloaded', { storyId: id, format: storyFormat });
   };
 
   const saveToLib = () => {
@@ -117,6 +195,7 @@ export default function ReadPage() {
           ) : cur ? (
             <motion.div key={pg} initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }} transition={{ duration: 0.3 }}>
               <Border color={cur.moodColor}>
+                <IllustrationBlock page={cur} />
                 <p className="text-lg md:text-xl leading-relaxed text-brown">{cur.text}</p>
                 <p className="text-center text-brown-light text-sm mt-8">— {cur.pageNumber} —</p>
                 {pg === tot - 1 && (
