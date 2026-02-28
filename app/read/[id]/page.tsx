@@ -219,6 +219,11 @@ export default function ReadPage() {
         <div className="flex gap-1">{Array.from({ length: tot + 1 }).map((_, i) => <button key={i} onClick={() => setPg(i - 1)} className={`w-2 h-2 rounded-full transition ${i - 1 === pg ? 'bg-purple-600' : 'bg-border'}`} />)}</div>
         <button onClick={goNext} disabled={pg >= tot - 1} className="px-4 py-2 text-sm text-brown-light hover:text-brown disabled:opacity-30">Next →</button>
       </div>
+      {(story as any).costs && (
+        <div className="px-4 py-2 border-t border-border text-center">
+          <span className="text-xs text-brown-light/50">COGS: ~${(story as any).costs.total.toFixed(3)} (text ${(story as any).costs.textGeneration.toFixed(3)} + {(story as any).pages.filter((p: any) => p.illustrationUrl).length}x illustrations ${(story as any).costs.illustrations.toFixed(3)})</span>
+        </div>
+      )}
     </div>
   );
 }

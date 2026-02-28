@@ -1,11 +1,17 @@
 import { GenerateRequest, StoryPage } from './types';
 import { generateStory } from './story-templates';
 
-interface AIStoryResponse {
+export interface AIStoryResponse {
   title: string;
   subtitle: string;
   dedication: string;
   pages: StoryPage[];
+  textTokens?: { input: number; output: number };
+}
+
+export interface IllustrationResult {
+  url: string | null;
+  tokens?: { input: number; output: number };
 }
 
 function buildSystemPrompt(request: GenerateRequest): string {
@@ -118,6 +124,12 @@ export async function generateStoryWithAI(request: GenerateRequest): Promise<AIS
     // Ensure exactly 4 pages
     story.pages = story.pages.slice(0, 4);
 
+    // Extract token usage
+    const usage = data.usage;
+    if (usage) {
+      story.textTokens = { input: usage.prompt_tokens || 0, output: usage.completion_tokens || 0 };
+    }
+
     console.log(`AI generated story: "${story.title}" with ${story.pages.length} pages`);
     return story;
   } catch (error) {
@@ -126,9 +138,9 @@ export async function generateStoryWithAI(request: GenerateRequest): Promise<AIS
   }
 }
 
-export async function generateIllustration(description: string): Promise<string | null> {
+export async function generateIllustration(description: string): Promise<IllustrationResult> {
   const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey) return { url: null };
 
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -140,7 +152,7 @@ export async function generateIllustration(description: string): Promise<string 
         'X-Title': 'Storybook',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash-image-preview',
+        model: 'google/gemini-3-pro-image-preview',
         messages: [
           { role: 'user', content: `Children's book illustration, watercolor style, warm and whimsical: ${description}. No text in image.` },
         ],
@@ -152,14 +164,18 @@ export async function generateIllustration(description: string): Promise<string 
 
     if (!response.ok) {
       console.error('Image generation failed:', response.status);
-      return null;
+      return { url: null };
     }
 
     const data = await response.json();
     const imageUrl = data.choices?.[0]?.message?.images?.[0]?.imageUrl?.url;
-    return imageUrl || null;
+    const usage = data.usage;
+    return {
+      url: imageUrl || null,
+      tokens: usage ? { input: usage.prompt_tokens || 0, output: usage.completion_tokens || 0 } : undefined,
+    };
   } catch (error) {
     console.error('Image generation error:', error);
-    return null;
+    return { url: null };
   }
 }

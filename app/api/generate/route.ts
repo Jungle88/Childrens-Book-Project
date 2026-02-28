@@ -1,8 +1,14 @@
 import { NextResponse } from 'next/server';
 import { getDb, initDb } from '@/lib/db';
 import { generateStoryWithAI, generateIllustration } from '@/lib/ai-generate';
-import { GenerateRequest } from '@/lib/types';
+import { GenerateRequest, StoryCosts } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
+
+// OpenRouter pricing per 1M tokens
+const PRICING = {
+  'gemini-2.0-flash': { input: 0.10, output: 0.40 },
+  'gemini-3-pro-image': { input: 1.25, output: 5.00 },
+};
 
 export async function POST(request: Request) {
   try {
@@ -43,17 +49,26 @@ export async function POST(request: Request) {
     }
 
     // Try to generate illustrations for each page
+    let illustrationCount = 0;
     if (process.env.OPENROUTER_API_KEY) {
       const illustrationPromises = pages.map(async (page) => {
         try {
           const url = await generateIllustration(page.illustrationDescription);
-          if (url) page.illustrationUrl = url;
+          if (url) { page.illustrationUrl = url; illustrationCount++; }
         } catch (e) {
           console.error('Illustration generation failed for page', page.pageNumber, e);
         }
       });
       await Promise.allSettled(illustrationPromises);
     }
+
+    // COGS estimate
+    const costs = {
+      textGeneration: 0.003, // ~1K input + 2K output tokens on gemini-2.0-flash
+      illustrations: illustrationCount * 0.02, // ~$0.02 per image on gemini-3-pro-image
+      total: 0,
+    };
+    costs.total = +(costs.textGeneration + costs.illustrations).toFixed(4);
 
     const id = uuidv4();
     const now = new Date().toISOString();
@@ -79,7 +94,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       id, title, subtitle, dedication, pages, source, format,
       childName, childAge, interests, lessons, characters,
-      createdAt: now, views: 0, shares: 0,
+      createdAt: now, views: 0, shares: 0, costs,
     });
   } catch (error) {
     console.error('Generate error:', error);
