@@ -1,13 +1,15 @@
 import { NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { getDb, initDb } from '@/lib/db';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const db = getDb();
-    const row = db.prepare('SELECT * FROM stories WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+    await initDb();
+    const result = await db.execute({ sql: 'SELECT * FROM stories WHERE id = ?', args: [id] });
+    const row = result.rows[0];
     if (!row) return NextResponse.json({ error: 'Story not found' }, { status: 404 });
-    db.prepare('UPDATE stories SET views = views + 1 WHERE id = ?').run(id);
+    await db.execute({ sql: 'UPDATE stories SET views = views + 1 WHERE id = ?', args: [id] });
     const input = JSON.parse(row.input_json as string);
     const pages = JSON.parse(row.pages_json as string);
     return NextResponse.json({

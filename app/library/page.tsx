@@ -11,6 +11,7 @@ export default function LibraryPage() {
   useEffect(() => { setStories(JSON.parse(localStorage.getItem('storybook_library') || '[]')); }, []);
 
   const del = (id: string) => {
+    if (!confirm('Are you sure you want to delete this story?')) return;
     const u = stories.filter(s => s.id !== id);
     setStories(u); localStorage.setItem('storybook_library', JSON.stringify(u));
   };

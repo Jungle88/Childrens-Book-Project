@@ -60,11 +60,12 @@ export default function CreatePage() {
   const [setting, setSetting] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [nameError, setNameError] = useState('');
 
   const totalGoals = mentalModels.length + characterTraits.length;
 
   const toggleInterest = (interest: string) => {
-    setInterests((prev) => prev.includes(interest) ? prev.filter((i) => i !== interest) : [...prev, interest]);
+    setInterests((prev) => prev.includes(interest) ? prev.filter((i) => i !== interest) : prev.length >= 5 ? prev : [...prev, interest]);
   };
 
   const addCustomInterest = () => {
@@ -91,7 +92,10 @@ export default function CreatePage() {
   };
 
   const handleGenerate = async () => {
-    if (!childName.trim() || !setting) return;
+    if (!childName.trim()) { setNameError('Please enter your child\'s name'); return; }
+    if (childName.trim().length > 50) { setNameError('Name must be 50 characters or less'); return; }
+    if (!setting) return;
+    setNameError('');
     setLoading(true);
     setError('');
 
@@ -182,7 +186,7 @@ export default function CreatePage() {
           {step === 1 && (
             <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
               <h2 className="text-3xl font-bold text-brown mb-2">What does your child love?</h2>
-              <p className="text-brown-light mb-6">Pick as many as you like — these shape the story!</p>
+              <p className="text-brown-light mb-6">Pick 1-5 interests that shape the story! ({interests.length}/5 selected)</p>
 
               <div className="flex flex-wrap gap-3 mb-6">
                 {INTERESTS.map((interest) => (
@@ -192,6 +196,8 @@ export default function CreatePage() {
                     className={`px-4 py-2 rounded-full border transition text-sm font-medium ${
                       interests.includes(interest)
                         ? 'bg-purple-600 text-white border-purple-600'
+                        : interests.length >= 5
+                        ? 'bg-cream border-border text-brown-light opacity-50 cursor-not-allowed'
                         : 'bg-cream border-border text-brown hover:border-purple-400'
                     }`}
                   >
@@ -296,10 +302,12 @@ export default function CreatePage() {
                   <input
                     type="text"
                     value={childName}
-                    onChange={(e) => setChildName(e.target.value)}
+                    onChange={(e) => { setChildName(e.target.value); setNameError(''); }}
+                    maxLength={50}
                     placeholder="e.g., Luna"
-                    className="w-full px-4 py-3 rounded-xl border border-border bg-cream text-brown focus:outline-none focus:ring-2 focus:ring-purple-400"
+                    className={`w-full px-4 py-3 rounded-xl border bg-cream text-brown focus:outline-none focus:ring-2 focus:ring-purple-400 ${nameError ? 'border-red-400' : 'border-border'}`}
                   />
+                  {nameError && <p className="text-red-500 text-sm mt-1">{nameError}</p>}
                 </div>
 
                 <div>

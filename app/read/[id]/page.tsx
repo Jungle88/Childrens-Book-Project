@@ -111,6 +111,17 @@ export default function ReadPage() {
               <Border color={cur.moodColor}>
                 <p className="text-lg md:text-xl leading-relaxed text-brown">{cur.text}</p>
                 <p className="text-center text-brown-light text-sm mt-8">— {cur.pageNumber} —</p>
+                {pg === tot - 1 && (
+                  <div className="text-center mt-8 pt-6 border-t border-border">
+                    <p className="text-2xl mb-2">✨</p>
+                    <p className="text-brown font-bold mb-1">The End</p>
+                    <p className="text-brown-light text-sm mb-4">A story for {story.childName}</p>
+                    <div className="flex gap-3 justify-center">
+                      <button onClick={(e) => { e.stopPropagation(); setPg(-1); }} className="px-4 py-2 text-sm rounded-full border border-border text-brown hover:bg-cream-dark transition">Read Again</button>
+                      <button onClick={(e) => { e.stopPropagation(); router.push('/create'); }} className="px-4 py-2 text-sm rounded-full bg-purple-600 text-white hover:bg-purple-700 transition">New Story</button>
+                    </div>
+                  </div>
+                )}
               </Border>
             </motion.div>
           ) : null}

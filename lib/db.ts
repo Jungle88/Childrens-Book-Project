@@ -1,17 +1,22 @@
-import Database from 'better-sqlite3';
-import path from 'path';
-import fs from 'fs';
+import { createClient, type Client } from '@libsql/client';
 
-const DB_PATH = path.join(process.cwd(), 'data', 'storybook.db');
-let db: Database.Database | null = null;
+let client: Client | null = null;
 
-export function getDb(): Database.Database {
-  if (db) return db;
-  const dir = path.dirname(DB_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  db = new Database(DB_PATH);
-  db.pragma('journal_mode = WAL');
-  db.exec(`
+export function getDb(): Client {
+  if (client) return client;
+  client = createClient({
+    // For production on Vercel, switch to Turso: https://turso.tech
+    // Set TURSO_DATABASE_URL=libsql://your-db.turso.io and TURSO_AUTH_TOKEN
+    // SQLite file won't persist on serverless platforms
+    url: process.env.TURSO_DATABASE_URL || 'file:data/storybook.db',
+    authToken: process.env.TURSO_AUTH_TOKEN,
+  });
+  return client;
+}
+
+export async function initDb(): Promise<void> {
+  const db = getDb();
+  await db.executeMultiple(`
     CREATE TABLE IF NOT EXISTS stories (
       id TEXT PRIMARY KEY, title TEXT NOT NULL, child_name TEXT NOT NULL, child_age INTEGER NOT NULL,
       input_json TEXT NOT NULL, pages_json TEXT NOT NULL,
@@ -24,5 +29,4 @@ export function getDb(): Database.Database {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
-  return db;
 }
