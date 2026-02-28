@@ -131,7 +131,7 @@ export async function generateIllustration(description: string): Promise<string 
   if (!apiKey) return null;
 
   try {
-    const response = await fetch('https://openrouter.ai/api/v1/images/generations', {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -140,10 +140,13 @@ export async function generateIllustration(description: string): Promise<string 
         'X-Title': 'Storybook',
       },
       body: JSON.stringify({
-        model: 'openai/dall-e-3',
-        prompt: `Children's book illustration, warm watercolor style, gentle and whimsical: ${description}`,
-        n: 1,
-        size: '1024x1024',
+        model: 'google/gemini-2.5-flash-image-preview',
+        messages: [
+          { role: 'user', content: `Children's book illustration, watercolor style, warm and whimsical: ${description}. No text in image.` },
+        ],
+        modalities: ['image', 'text'],
+        image_config: { aspect_ratio: '3:4' },
+        stream: false,
       }),
     });
 
@@ -153,7 +156,8 @@ export async function generateIllustration(description: string): Promise<string 
     }
 
     const data = await response.json();
-    return data.data?.[0]?.url || null;
+    const imageUrl = data.choices?.[0]?.message?.images?.[0]?.imageUrl?.url;
+    return imageUrl || null;
   } catch (error) {
     console.error('Image generation error:', error);
     return null;
