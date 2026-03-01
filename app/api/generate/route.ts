@@ -4,6 +4,9 @@ import { generateStoryWithAI, generateIllustration } from '@/lib/ai-generate';
 import { GenerateRequest, StoryCosts } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
 
+// Vercel function config — allow up to 60s (Hobby max)
+export const maxDuration = 60;
+
 // OpenRouter pricing per 1M tokens
 const PRICING = {
   'gemini-2.0-flash': { input: 0.10, output: 0.40 },
@@ -55,10 +58,10 @@ export async function POST(request: Request) {
       pages = tmpl.pages;
     }
 
-    // Generate illustrations and track costs
+    // Generate illustrations sequentially to stay within Vercel timeout
     let illustrationCost = 0;
     if (process.env.OPENROUTER_API_KEY) {
-      const illustrationPromises = pages.map(async (page) => {
+      for (const page of pages) {
         try {
           const result = await generateIllustration(page.illustrationDescription);
           if (result.url) page.illustrationUrl = result.url;
@@ -69,8 +72,7 @@ export async function POST(request: Request) {
         } catch (e) {
           console.error('Illustration generation failed for page', page.pageNumber, e);
         }
-      });
-      await Promise.allSettled(illustrationPromises);
+      }
     }
 
     const costs: StoryCosts = {
